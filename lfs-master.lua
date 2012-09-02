@@ -6,24 +6,29 @@ proto_lfs.fields = {
 	ProtoField.ipv4("server.ipv4", "Server IPv4 Addr"),
 	ProtoField.uint8("server.port", "Server IPv4 Port", base.DEC),
 	ProtoField.uint8("packet.size", "Packet Size", base.DEC),
-	ProtoField.string("packet.type", "Packet Type")
+	ProtoField.string("packet.type", "Packet Type"),
+	ProtoField.string("packet.header", "Packet Header"),
+	ProtoField.string("license.username", "Licensed Username"),
+	ProtoField.string("license.password", "Licensed Password (?)"),
+	ProtoField.string("misc.string", "Unknown (String?)"),
 }
 
 function tree_add_client(buffer, pinfo, tree, offset, len)
-	tree:add(buffer(offset + 1, 4), "Header: " .. buffer(offset + 1, 4):string())
-	tree:add(buffer(offset + 5, 24), "24 Char Str(?): " .. buffer(offset + 5, 24):string())
-	tree:add(buffer(offset + 41, 24), "Username: " .. buffer(offset + 41, 24):string())
-	tree:add(buffer(offset + 65, 12), "Password(?): " .. buffer(offset + 65, 12):string())
+	tree:add(proto_lfs.fields[5], buffer(offset + 1, 4))
+	tree:add(proto_lfs.fields[8], buffer(offset + 5, 36))
+	tree:add(proto_lfs.fields[6], buffer(offset + 41, 24))
+	tree:add(proto_lfs.fields[7], buffer(offset + 65, 12))
 end
 
 function tree_add_server(buffer, pinfo, tree, offset, len)
 	if (len == 8) then
-		tree:add(buffer(offset + 5, 1), "Number of Servers: " .. buffer(offset + 5, 1):le_uint())
+		tree:add(buffer(offset + 5, 1), "Number of Servers (works for small values only?): " .. buffer(offset + 5, 1):le_uint())
 	else
 		local ptr = offset + 1
-		lfs_pkttree:add(proto_lfs.fields[4], "Server List")
+		tree:add(proto_lfs.fields[4], "Server List")
 
 		while (ptr + 8 < len) do
+
 			local subtree = tree:add(proto_lfs, buffer(ptr, 6), "Server")
 			subtree:add(proto_lfs.fields[1], buffer(ptr, 4))
 			subtree:add(proto_lfs.fields[2], buffer(ptr + 4, 2), buffer(ptr + 4, 2):le_uint())
