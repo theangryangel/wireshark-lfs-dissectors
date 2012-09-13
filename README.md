@@ -4,8 +4,12 @@
 LFS master server-client dissector.
 Work in progress. 
 
-## online.lua
+## multiplayer.lua
 LFS online game dissector.
+Work in progress.
+
+## insim.lua
+LFS InSim dissector.
 Work in progress.
 
 # Launching
