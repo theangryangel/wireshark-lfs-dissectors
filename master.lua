@@ -22,8 +22,13 @@ end
 
 function tree_add_server(buffer, pinfo, tree, offset, len)
 	if (len == 8) then
+		-- Initial response - success
 		tree:add(buffer(offset + 5, 1), "Number of Servers (works for small values only?): " .. buffer(offset + 5, 1):le_uint())
+	elseif (len == 32) then
+		-- Initial response - error
+		tree:add(buffer(offset + 1, 32), "Error message")
 	else
+		-- Otherwise, it's servers baby
 		local ptr = offset + 1
 		tree:add(proto_lfs.fields[4], "Server List")
 
