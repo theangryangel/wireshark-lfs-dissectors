@@ -1,4 +1,7 @@
 do
+	-- port
+	local PORT = 63391
+
 	-- UDP
 	
 	local lfs_mp_udp_name = "LFS Multiplayer Protocol (UDP)"
@@ -40,6 +43,11 @@ do
 	local lfs_mp_tcp = Proto("lfs_mp_tcp", lfs_mp_tcp_name)
 	
 	function lfs_mp_tcp.dissector(buffer, pinfo, tree)
+
+		if pinfo.dstport == PORT then
+			return
+		end
+
 		local size = buffer:len()
 		local offset = 0
 		
@@ -74,6 +82,6 @@ do
 	end
 	
 	tcp_table = DissectorTable.get("tcp.port")
-	tcp_table:add(63391, lfs_mp_tcp)
+	tcp_table:add(PORT, lfs_mp_tcp)
 	
 end
