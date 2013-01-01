@@ -25,14 +25,27 @@ do
 			tree:add(buffer, "Unknown Packet")
 		end,
 
-		-- new player/racer(?)
-		[0] = function(buffer, tree)
-			tree:add(buffer(0), "New Racer(?)")
+		-- multi-purpose
+		[1] = function (buffer, tree)
+			-- XXX:  probably bitwise flags rather than a number
+			local subt = buffer(1, 1):le_uint()
+
+			tree:add(buffer(1, 1), "SubType: " .. subt)
+			
+			-- return the next function the dissector should call
+			-- prevents us from cluttering up this function when there are large
+			-- numbers of subtypes
+			return "1:" .. tostring(subt)
 		end,
 
+		-- packet 1, subtype 1
 		-- chat message
-		[1] = function (buffer, tree)
-			tree:add(buffer(5), "Chat Message")
+		["1:1"] = function(buffer, tree)
+			tree:add(buffer(3, 1), "Connection ID: " .. buffer(3, 1):le_uint())
+
+			if (buffer:len() > 4) then
+				tree:add(buffer(5), "Chat Message")
+			end
 		end,
 
 		-- welcome message/track information
@@ -58,8 +71,21 @@ do
 			tree:add(buffer(0), "Setup - Seems to be encrypted by Packet ID 4 (previous packet)")
 			tree:add(buffer(12, 32), "Car")
 			tree:add(buffer(44, 16), "Skin Name")
-		end
+		end,
 
+		-- New connection(?)
+		[7] = function(buffer, tree)
+			tree:add(buffer(1, 1), "Connection ID: " .. buffer(1, 1):le_uint())
+			tree:add(buffer(4, 24), "Player Name: " .. buffer(4, 24):string())
+			tree:add(buffer(36, 24), "License Name: " .. buffer(36, 24):string())
+		end,
+
+		-- New player(?)
+		[49] = function(buffer, tree)
+			tree:add(buffer(4, 24), "Player Name: " .. buffer(4, 24):string())
+			tree:add(buffer(36, 4), "Vehicle (Short): " .. buffer(36, 4):string())
+			tree:add(buffer(64, 24), "License Name: " .. buffer(64, 24):string())
+		end,
 	}
 
 	local lfs_mp_tcp_name = "LFS Multiplayer Protocol (TCP) Stream"
@@ -96,7 +122,7 @@ do
 			local func = 'unknown'
 			local id = rest(1, 1):le_uint()
 
-			if lfs_mp_tcp_packets[id] ~= nil then
+			if (lfs_mp_tcp_packets[id] ~= nil) then
 				func = id
 			end
 
@@ -104,7 +130,13 @@ do
 			subtree:add(rest(0, 1), "Packet Size: " .. length)
 			subtree:add(rest(1, 1), "Packet ID: " .. id)
 
-			lfs_mp_tcp_packets[func](rest(1, length), subtree)
+			-- If we get a result from calling lfs_mp_tcp_packets[func]
+			-- we need go again. This is useful for packets with multiple
+			-- subtypes
+			while ((func ~= nil) and (lfs_mp_tcp_packets[func] ~= nil)) do
+				local res = lfs_mp_tcp_packets[func](rest(1, length), subtree)
+				func = res
+			end
 
 			offset = offset + stream_length
 		end
