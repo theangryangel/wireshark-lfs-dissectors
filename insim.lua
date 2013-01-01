@@ -1,63 +1,68 @@
-local proto_name = "LFS InSim Protocol"
+do
 
--- Known LFS InSim packets
-local proto_insim_packets = {
-	-- invalid packet type
-	0 = function(buffer, offset, tree)
-	end,
-	-- ISI
-	1 = function(buffer, offset, tree)
-	end,
-}
+	local lfs_insim_name = "LFS InSim Protocol"
+	local lfs_insim = Proto("lfs_insim", lfs_insim_name)	
 
-local proto_insim = Proto("proto_insim", proto_name)
-proto_insim.fields = {
-	ProtoField.uint8("proto_insim.size", "Packet Size", base.DEC),
-	ProtoField.uint8("proto_insim.id", "Packet ID", base.DEC),
-	ProtoField.bytes("proto_insim.unhandled","Unhandled Packet Data"),
-}
+	-- known InSim packets
+	local lfs_insim_packets = {
+		-- unknown
+		['unknown'] = function(buffer, tree)
+		end,
 
-function proto_insim.dissector(buffer, pinfo, tree)
+		-- ISI
+		[1] = function(buffer, tree)
+		end,
+	}
+	
+	function lfs_insim.dissector(buffer, pinfo, tree)
+		local offset = 0
 
-	local available = buffer:len()
-	local used = 0
+		while (offset < buffer:len()) do
 
-	pinfo.desegment_len = 0
+			local rest = buffer(offset)
 
-	local subtree = tree:add(proto_insim, buffer(), proto_name)
+			local length = rest(0,1):le_uint()
 
-	while used < available do
-		local size = buffer(used, 1):uint()
-		local id = buffer(used + 1, 1):uint()
+			assert((length ~= 0), "Invalid packet size!")
 
-		if (size + used) > available then
-			pinfo.desegment_len = (size + used) - available
-			return
+			local stream_length = length + 1
+
+			if (rest:len() < stream_length) then
+				-- packet is not complete
+				pinfo.desegment_offset = offset
+				pinfo.desegment_len = stream_length - rest:len()
+				return nil
+			end
+
+			local func = 'unknown'
+			local id = rest(1, 1):le_uint()
+
+			if (lfs_insim_packets[id] ~= nil) then
+				func = id
+			end
+
+			local subtree = tree:add(lfs_insim, rest(0, stream_length), lfs_insim_name .. " Packet")
+			subtree:add(rest(0, 1), "Packet Size: " .. length)
+			subtree:add(rest(1, 1), "Packet ID: " .. id)
+
+			-- If we get a result from calling lfs_insim_packets[func]
+			-- we need go again. This is useful for packets with multiple
+			-- subtypes
+			while ((func ~= nil) and (lfs_insim_packets[func] ~= nil)) do
+				local res = lfs_insim_packets[func](rest(1, length), subtree)
+				func = res
+			end
+
+			offset = offset + stream_length
 		end
-
-		treepkt = subtree:add(proto_insim, buffer(used), "InSim Packet")
-		-- packet size
-		treepkt:add(proto_insim.fields[1], buffer(used, 1))
-		-- packet id
-		treepkt:add(proto_insim.fields[2], buffer(used + 1, 1))
-
-		if proto_insim_packets[id] then
-			-- known packet
-			proto_insim_packets[id](buffer, used, treepkt)
-		else
-			-- unhandled packet data
-			treepkt:add(proto_insim.fields[3], buffer(used + 2, size - 2))
-		end
-
-		-- next packet
-		used += size
-	end 
+	
+	end
+	
+	-- register the dissector
+	tcp_table = DissectorTable.get("tcp.port")
+	tcp_table:add(29999, lfs_insim)
+	
+	udp_table = DissectorTable.get("udp.port")
+	udp_table:add(29999, lfs_insim)
 
 end
-
--- register the dissector
-tcp_table = DissectorTable.get("tcp.port")
-tcp_table:add(29999, proto_insim)
-
-udp_table = DissectorTable.get("udp.port")
-udp_table:add(29999, proto_insim)

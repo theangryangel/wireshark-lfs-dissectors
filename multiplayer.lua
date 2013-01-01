@@ -88,7 +88,7 @@ do
 		end,
 	}
 
-	local lfs_mp_tcp_name = "LFS Multiplayer Protocol (TCP) Stream"
+	local lfs_mp_tcp_name = "LFS Multiplayer Protocol (TCP)"
 	local lfs_mp_tcp = Proto("lfs_mp_tcp", lfs_mp_tcp_name)
 
 	local lfs_mp_tcp_count_client
@@ -100,6 +100,9 @@ do
 	end
 
 	function lfs_mp_tcp.dissector(buffer, pinfo, tree)
+
+		local direction = ((pinfo.match ~= pinfo.dst_port) and "Server -> Client" or "Client -> Server")
+
 		local offset = 0
 
 		while (offset < buffer:len()) do
@@ -126,7 +129,7 @@ do
 				func = id
 			end
 
-			local subtree = tree:add(lfs_mp_tcp, rest(0, stream_length), lfs_mp_tcp_name .. " Packet")
+			local subtree = tree:add(lfs_mp_tcp, rest(0, stream_length), lfs_mp_tcp_name .. " Packet (" .. direction .. ")")
 			subtree:add(rest(0, 1), "Packet Size: " .. length)
 			subtree:add(rest(1, 1), "Packet ID: " .. id)
 
@@ -142,6 +145,7 @@ do
 		end
 	end
 
+	-- register
 	tcp_table = DissectorTable.get("tcp.port")
 	tcp_table:add(PORT, lfs_mp_tcp)
 
