@@ -9,20 +9,38 @@ do
 
 	function lfs_mp_udp.dissector(buffer, pinfo, tree)
 
-		-- Add an proto_lfs Protocol subtree in the decoded pane
-		local subtree = tree:add(lfs_mp_udp, buffer(), lfs_mp_udp_name .. " Packet")
-		subtree:add(buffer(0, 1), "Packet Size " .. buffer(0, 1):le_uint())
+		local server = (pinfo.match ~= pinfo.dst_port)
+
+		local direction = (server and "Server -> Client" or "Client -> Server")
+		local subtree = tree:add(lfs_mp_udp, buffer, lfs_mp_udp_name .. " Packet (" .. direction .. ")")
+
+		local length = buffer:len()
+
+		subtree:add("Packet Size: " .. length)
+
+		-- Hello/NAT busting
+		if (buffer(0, 1):string() == 'L') then
+			subtree:add(buffer(0, length), 'Hello/NAT Bust Message')
+			return
+		end
+
+		-- otherwise we're a position packet, i think
+
+		-- when sent from server first 2 bytes possibly used as an autoincrement id
+		if (server) then
+			subtree:add(buffer(0, 2), "Packet Order Number (?): " .. buffer(0, 2):le_uint())
+		end
 	end
 
-	--udp_table = DissectorTable.get("udp.port")
-	--udp_table:add(58996, lfs_mp_udp)
+	udp_table = DissectorTable.get("udp.port")
+	udp_table:add(PORT, lfs_mp_udp)
 
 	-- TCP
 
 	local lfs_mp_tcp_packets = {
 		-- general
 		["unknown"] = function(buffer, tree)
-			tree:add(buffer, "Unknown Packet")
+			tree:add(buffer, "Unknown TCP Packet")
 		end,
 
 		-- multi-purpose
